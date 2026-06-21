@@ -2,8 +2,6 @@
 
 import { useState } from 'react'
 import { useBoardStore } from '@/lib/store/board-store'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import type { Figure } from '@/types/database'
 
 interface LocalSnapshot {
@@ -31,79 +29,59 @@ export function SnapshotPanel({ sessionId: _ }: { sessionId: string }) {
   }
 
   function handleLoad(snapshot: LocalSnapshot) {
-    setFigures(
-      snapshot.state.map((f) => ({
-        ...f,
-        id: crypto.randomUUID(),
-        updated_at: new Date().toISOString(),
-      }))
-    )
+    setFigures(snapshot.state.map((f) => ({ ...f, id: crypto.randomUUID(), updated_at: new Date().toISOString() })))
     setConfirmLoad(null)
   }
 
   function formatTime(date: string) {
-    return new Intl.DateTimeFormat('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(date))
+    return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(date))
   }
 
   return (
-    <div className="flex flex-col gap-3 p-3 bg-white/90 backdrop-blur rounded-lg border shadow-sm">
-      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+    <div className="flex flex-col gap-3">
+      <span className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest px-1">
         Snapshots
       </span>
-
       <div className="flex gap-1.5">
-        <Input
+        <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Notiz (optional)..."
-          className="h-7 text-xs"
+          className="flex-1 text-[11px] px-2 py-1.5 rounded-lg bg-white/70 border border-white/80 focus:outline-none focus:bg-white placeholder:text-[#1F4045]/30 text-[#1F4045]"
         />
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs shrink-0"
+        <button
           onClick={handleSave}
+          disabled={figures.length === 0}
+          className="px-2.5 py-1.5 text-[11px] rounded-lg bg-white/80 border border-white/80 text-[#1F4045]/70 hover:bg-white hover:text-[#1F4045] disabled:opacity-40 transition-all"
         >
           Speichern
-        </Button>
+        </button>
       </div>
 
-      {snapshots.length > 0 && (
-        <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+      {snapshots.length > 0 ? (
+        <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
           {snapshots.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center justify-between text-xs p-1.5 rounded hover:bg-muted/50"
-            >
-              <div className="min-w-0">
-                <p className="truncate">{s.note || formatTime(s.created_at)}</p>
-                {s.note && (
-                  <p className="text-muted-foreground">{formatTime(s.created_at)}</p>
-                )}
+            <div key={s.id} className="flex items-center gap-2 text-[11px] p-2 rounded-lg bg-white/50 hover:bg-white/80 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-[#1F4045]/80 truncate">{s.note || formatTime(s.created_at)}</p>
+                {s.note && <p className="text-[#1F4045]/40">{formatTime(s.created_at)}</p>}
               </div>
               {confirmLoad === s.id ? (
                 <div className="flex gap-1 shrink-0">
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => handleLoad(s)}>Ja</Button>
-                  <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setConfirmLoad(null)}>Nein</Button>
+                  <button onClick={() => handleLoad(s)} className="text-[10px] px-1.5 py-0.5 rounded bg-[#1F4045] text-white">Ja</button>
+                  <button onClick={() => setConfirmLoad(null)} className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 text-[#1F4045]/60">Nein</button>
                 </div>
               ) : (
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2 shrink-0" onClick={() => setConfirmLoad(s.id)}>
+                <button onClick={() => setConfirmLoad(s.id)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/80 text-[#1F4045]/60 hover:text-[#1F4045] shrink-0">
                   Laden
-                </Button>
+                </button>
               )}
             </div>
           ))}
         </div>
-      )}
-
-      {snapshots.length === 0 && (
-        <p className="text-[10px] text-muted-foreground italic">
-          Noch keine Snapshots. Board-Zustand speichern um Entwicklung zu dokumentieren.
+      ) : (
+        <p className="text-[10px] text-[#1F4045]/40 italic">
+          Board-Zustand speichern um Entwicklung zu dokumentieren.
         </p>
       )}
     </div>

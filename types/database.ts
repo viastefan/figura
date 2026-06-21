@@ -31,6 +31,14 @@ export interface Figure {
   updated_at: string
 }
 
+export interface Connection {
+  id: string
+  fromId: string
+  toId: string
+  style: 'solid' | 'dashed' | 'dotted'
+  color: string
+}
+
 export interface Snapshot {
   id: string
   session_id: string
