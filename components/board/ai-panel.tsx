@@ -4,86 +4,115 @@ import { useState } from 'react'
 import { useBoardStore } from '@/lib/store/board-store'
 import type { Figure } from '@/types/database'
 
-function describeFigures(figures: Figure[]): string {
-  if (figures.length === 0) return 'Das Brett ist leer.'
-
-  const center = { x: 600, y: 400 }
-
-  return figures.map((f) => {
-    const dx = f.x - center.x
-    const dy = f.y - center.y
-    const dist = Math.sqrt(dx * dx + dy * dy)
-
-    const pos =
-      dist < 150 ? 'im Zentrum' :
-      dist < 300 ? 'in der Mitte' :
-      'am Rand'
-
-    const dir = f.rotation
-    const dirLabel =
-      dir < 22 || dir >= 338 ? 'nach oben' :
-      dir < 68 ? 'nach rechts-oben' :
-      dir < 113 ? 'nach rechts' :
-      dir < 158 ? 'nach rechts-unten' :
-      dir < 203 ? 'nach unten' :
-      dir < 248 ? 'nach links-unten' :
-      dir < 293 ? 'nach links' :
-      'nach links-oben'
-
-    const colorMeaning: Record<string, string> = {
-      '#E8B4B8': 'Rosa (Fürsorge)',
-      '#A8C5DA': 'Blau (Ruhe)',
-      '#B5D5A7': 'Grün (Wachstum)',
-      '#F2D479': 'Gelb (Energie)',
-      '#C4A6E0': 'Lila (Intuition)',
-      '#F5C5A3': 'Orange (Wärme)',
-      '#94A3B8': 'Grau (Distanz)',
-      '#F87171': 'Rot (Konflikt)',
-    }
-
-    const shapeLabel: Record<string, string> = {
-      circle: 'Person',
-      square: 'Gruppe',
-      triangle: 'Kraft',
-      diamond: 'Idee',
-    }
-
-    return `- ${f.label ? `"${f.label}"` : 'Unbenannte Figur'} (${shapeLabel[f.shape]}, ${colorMeaning[f.color] ?? f.color}): steht ${pos}, schaut ${dirLabel}`
-  }).join('\n')
+const COLOR_MEANINGS: Record<string, string> = {
+  '#c8a882': 'neutral',
+  '#E8B4B8': 'fürsorglich (Rosa)',
+  '#A8C5DA': 'ruhig (Blau)',
+  '#B5D5A7': 'wachsend (Grün)',
+  '#F2D479': 'energetisch (Gelb)',
+  '#C4A6E0': 'intuitiv (Lila)',
+  '#F5C5A3': 'warm (Orange)',
+  '#94A3B8': 'distanziert (Grau)',
+  '#F87171': 'in Konflikt (Rot)',
 }
+
+function buildDescription(figures: Figure[], connections: { fromId: string; toId: string }[]): string {
+  if (figures.length === 0) return 'Keine Figuren auf dem Brett.'
+
+  const boardW = 1200, boardH = 800
+  const centerX = boardW / 2, centerY = boardH / 2
+
+  const descs = figures.map((f) => {
+    const dx = (f.x + 26) - centerX
+    const dy = (f.y + 30) - centerY
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    const maxDist = Math.sqrt(centerX * centerX + centerY * centerY)
+    const relDist = dist / maxDist
+
+    const zone = relDist < 0.2 ? 'im Zentrum des Bretts'
+      : relDist < 0.45 ? 'in der Mitte'
+      : relDist < 0.7 ? 'weiter außen'
+      : 'am Rand des Bretts'
+
+    const r = ((f.rotation % 360) + 360) % 360
+    const facing = r < 22.5 || r >= 337.5 ? 'schaut nach oben (vom Zentrum weg)'
+      : r < 67.5 ? 'schaut nach rechts-oben'
+      : r < 112.5 ? 'schaut nach rechts'
+      : r < 157.5 ? 'schaut nach rechts-unten'
+      : r < 202.5 ? 'schaut nach unten (zum Zentrum hin)'
+      : r < 247.5 ? 'schaut nach links-unten'
+      : r < 292.5 ? 'schaut nach links'
+      : 'schaut nach links-oben'
+
+    const colorMeaning = COLOR_MEANINGS[f.color] ?? 'unbekannte Farbe'
+    const name = f.label ? `"${f.label}"` : '(unbenannt)'
+
+    const connectedTo = connections
+      .filter(c => c.fromId === f.id || c.toId === f.id)
+      .map(c => {
+        const otherId = c.fromId === f.id ? c.toId : c.fromId
+        const other = figures.find(fig => fig.id === otherId)
+        return other?.label ? `"${other.label}"` : null
+      })
+      .filter(Boolean)
+
+    return `• ${name} — ${zone}, ${facing}, Farbe: ${colorMeaning}${
+      connectedTo.length > 0 ? `, verbunden mit: ${connectedTo.join(', ')}` : ''
+    }`
+  }).join('\n')
+
+  const connSummary = connections.length > 0
+    ? `\nVerbindungen im System: ${connections.length}`
+    : ''
+
+  return descs + connSummary
+}
+
+const QUICK_QUESTIONS = [
+  'Was fällt dir als erstes auf?',
+  'Wer scheint am meisten isoliert?',
+  'Welche Beziehungen wirken angespannt?',
+  'Was könnte ein nächster hilfreicher Schritt sein?',
+]
 
 export function AiPanel({ sessionTitle }: { sessionTitle: string }) {
   const { figures, connections } = useBoardStore()
-  const [analysis, setAnalysis] = useState<string>('')
+  const [analysis, setAnalysis] = useState('')
   const [loading, setLoading] = useState(false)
   const [question, setQuestion] = useState('')
-  const [mode, setMode] = useState<'analyse' | 'frage'>('analyse')
 
-  async function handleAnalyse() {
+  async function runAnalysis(customPrompt?: string) {
     if (figures.length === 0) return
     setLoading(true)
     setAnalysis('')
 
-    const figureDesc = describeFigures(figures)
-    const connDesc = connections.length > 0
-      ? `\nVerbindungen: ${connections.map(c => {
-          const from = figures.find(f => f.id === c.fromId)
-          const to = figures.find(f => f.id === c.toId)
-          return `${from?.label || 'Figur'} ↔ ${to?.label || 'Figur'}`
-        }).join(', ')}`
-      : ''
+    const boardDesc = buildDescription(figures, connections)
 
-    const prompt = mode === 'analyse'
-      ? `Du bist ein erfahrener systemischer Berater. Analysiere die folgende Aufstellung aus der Sitzung "${sessionTitle}" systemisch und einfühlsam. Beschreibe was du in den Positionen, Blickrichtungen und Beziehungen siehst. Bleib beim Phänomen, ohne zu interpretieren oder zu bewerten. Nutze systemische Sprache. Halte dich kurz (max 200 Wörter).
+    const prompt = customPrompt
+      ? `Du bist ein erfahrener systemischer Berater mit tiefem Verständnis für Aufstellungsarbeit.
 
-Aktuelle Aufstellung:
-${figureDesc}${connDesc}`
-      : `Du bist ein erfahrener systemischer Berater. Die folgende Frage bezieht sich auf diese Aufstellung aus der Sitzung "${sessionTitle}". Antworte systemisch, ressourcenorientiert und kurz (max 150 Wörter).
+Sitzung: "${sessionTitle}"
 
-Aufstellung:
-${figureDesc}${connDesc}
+Aktuelle Aufstellung auf dem Systembrett:
+${boardDesc}
 
-Frage des Beraters: ${question}`
+Frage des Beraters: ${customPrompt}
+
+Antworte in 2-4 Sätzen, systemisch, phänomenologisch, ohne zu bewerten. Spreche von dem was du siehst, nicht von dem was es bedeutet.`
+      : `Du bist ein erfahrener systemischer Berater mit tiefem Verständnis für Aufstellungsarbeit.
+
+Sitzung: "${sessionTitle}"
+
+Aktuelle Aufstellung auf dem Systembrett:
+${boardDesc}
+
+Beschreibe in 3-5 Sätzen was du in dieser Konstellation phänomenologisch wahrnimmst. Achte besonders auf:
+- Nähe und Distanz zwischen Figuren
+- Blickrichtungen: wer schaut wen an, wer schaut weg?
+- Zentrum und Peripherie: wer steht wo im System?
+- Verbindungen und Trennungen
+
+Bleibe beim Phänomen. Keine Interpretationen oder Ratschläge. Systemische Sprache.`
 
     try {
       const res = await fetch('/api/ai', {
@@ -94,79 +123,87 @@ Frage des Beraters: ${question}`
       const data = await res.json()
       setAnalysis(data.text || 'Keine Antwort erhalten.')
     } catch {
-      setAnalysis('Fehler bei der KI-Analyse. Bitte erneut versuchen.')
+      setAnalysis('Verbindungsfehler. Bitte erneut versuchen.')
     }
     setLoading(false)
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest flex-1">
-          KI-Analyse
-        </span>
-        <div className="flex text-[9px] bg-white/60 rounded-lg overflow-hidden border border-white/80">
-          <button
-            onClick={() => setMode('analyse')}
-            className={`px-2 py-1 ${mode === 'analyse' ? 'bg-[#1F4045] text-white' : 'text-[#1F4045]/60'}`}
-          >
-            Analyse
-          </button>
-          <button
-            onClick={() => setMode('frage')}
-            className={`px-2 py-1 ${mode === 'frage' ? 'bg-[#1F4045] text-white' : 'text-[#1F4045]/60'}`}
-          >
-            Frage
-          </button>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] font-semibold text-[#3d2b1a]/50 uppercase tracking-widest">KI-Perspektive ✦</span>
+        <p className="text-[10px] text-[#3d2b1a]/50 leading-relaxed">
+          Die KI liest Positionen, Blickrichtungen und Verbindungen und gibt eine systemische Einschätzung.
+        </p>
       </div>
 
-      {mode === 'frage' && (
-        <textarea
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="z.B. Was könnte die Distanz zwischen Vater und Kind bedeuten?"
-          className="w-full text-[11px] p-2 rounded-lg bg-white/70 border border-white/80 resize-none h-16 focus:outline-none focus:bg-white placeholder:text-[#1F4045]/30 text-[#1F4045]"
-        />
-      )}
-
+      {/* Main analyse button */}
       <button
-        onClick={handleAnalyse}
-        disabled={loading || figures.length === 0 || (mode === 'frage' && !question.trim())}
-        className="w-full py-2 text-[11px] font-medium rounded-lg bg-[#1F4045] text-white hover:bg-[#1F4045]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5"
+        onClick={() => runAnalysis()}
+        disabled={loading || figures.length === 0}
+        className="w-full py-3 rounded-xl bg-[#1F4045] text-white text-[12px] font-medium hover:bg-[#1F4045]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm"
       >
         {loading ? (
           <>
-            <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            Analysiere…
+            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            Analysiere Aufstellung…
           </>
         ) : (
-          <>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="currentColor"/>
-            </svg>
-            {mode === 'analyse' ? 'Aufstellung analysieren' : 'Frage stellen'}
-          </>
+          <>✦ Aufstellung analysieren</>
         )}
       </button>
 
       {figures.length === 0 && (
-        <p className="text-[10px] text-[#1F4045]/40 italic text-center">
-          Füge Figuren hinzu um die KI-Analyse zu nutzen
+        <p className="text-[10px] text-[#3d2b1a]/40 italic text-center">
+          Erst Figuren auf das Brett setzen
         </p>
       )}
 
+      {/* Quick questions */}
+      {figures.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-semibold text-[#3d2b1a]/50 uppercase tracking-widest">Schnell fragen</span>
+          {QUICK_QUESTIONS.map((q) => (
+            <button
+              key={q}
+              onClick={() => { setQuestion(q); runAnalysis(q) }}
+              disabled={loading}
+              className="text-left text-[10px] text-[#3d2b1a]/60 hover:text-[#3d2b1a] px-3 py-2 rounded-lg bg-white/50 hover:bg-white/80 border border-white/60 hover:border-[#C9A96E]/30 transition-all disabled:opacity-40"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Custom question */}
+      {figures.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-semibold text-[#3d2b1a]/50 uppercase tracking-widest">Eigene Frage</span>
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="z.B. Was könnte die Distanz zwischen Vater und Kind bedeuten?"
+            className="w-full text-[11px] p-2.5 rounded-xl bg-white/70 border border-white/80 resize-none h-20 focus:outline-none focus:bg-white focus:border-[#C9A96E]/40 placeholder:text-[#3d2b1a]/25 text-[#3d2b1a]"
+          />
+          <button
+            onClick={() => runAnalysis(question)}
+            disabled={loading || !question.trim() || figures.length === 0}
+            className="w-full py-2 text-[11px] rounded-xl bg-white/80 border border-[#C9A96E]/30 text-[#3d2b1a]/70 hover:bg-white hover:text-[#3d2b1a] disabled:opacity-40 transition-all"
+          >
+            Frage stellen →
+          </button>
+        </div>
+      )}
+
+      {/* Response */}
       {analysis && (
-        <div className="bg-white/80 rounded-xl p-3 border border-[#C9A96E]/20 shadow-sm">
-          <div className="flex items-center gap-1.5 mb-2">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="#C9A96E"/>
-            </svg>
-            <span className="text-[9px] font-semibold text-[#C9A96E] uppercase tracking-wider">KI-Perspektive</span>
+        <div className="bg-white/85 rounded-2xl p-4 border border-[#C9A96E]/25 shadow-sm">
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="text-[#C9A96E] text-sm">✦</span>
+            <span className="text-[9px] font-bold text-[#C9A96E] uppercase tracking-widest">KI-Wahrnehmung</span>
           </div>
-          <p className="text-[11px] text-[#1F4045]/80 leading-relaxed whitespace-pre-wrap">
-            {analysis}
-          </p>
+          <p className="text-[11px] text-[#3d2b1a]/75 leading-relaxed">{analysis}</p>
         </div>
       )}
     </div>

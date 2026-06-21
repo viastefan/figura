@@ -1,26 +1,31 @@
 'use client'
 
 import { useBoardStore } from '@/lib/store/board-store'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Figure, Shape } from '@/types/database'
+import type { Figure } from '@/types/database'
 
-const COLORS = [
-  { hex: '#E8B4B8', label: 'Fürsorge' },
-  { hex: '#A8C5DA', label: 'Ruhe' },
-  { hex: '#B5D5A7', label: 'Wachstum' },
-  { hex: '#F2D479', label: 'Energie' },
-  { hex: '#C4A6E0', label: 'Intuition' },
-  { hex: '#F5C5A3', label: 'Wärme' },
-  { hex: '#94A3B8', label: 'Distanz' },
-  { hex: '#F87171', label: 'Konflikt' },
+const COLORS: { hex: string; role: string }[] = [
+  { hex: '#E8B4B8', role: 'Fürsorge' },
+  { hex: '#A8C5DA', role: 'Ruhe' },
+  { hex: '#B5D5A7', role: 'Wachstum' },
+  { hex: '#F2D479', role: 'Energie' },
+  { hex: '#C4A6E0', role: 'Intuition' },
+  { hex: '#F5C5A3', role: 'Wärme' },
+  { hex: '#94A3B8', role: 'Distanz' },
+  { hex: '#F87171', role: 'Konflikt' },
+  { hex: '#6B8F71', role: 'Stabilität' },
+  { hex: '#D4A5A5', role: 'Verlust' },
 ]
 
-const SHAPES: { shape: Shape; label: string }[] = [
-  { shape: 'circle', label: 'Person' },
-  { shape: 'square', label: 'Gruppe' },
-  { shape: 'triangle', label: 'Kraft' },
-  { shape: 'diamond', label: 'Idee' },
+const ROTATION_PRESETS = [
+  { label: 'N', deg: 0 },
+  { label: 'NO', deg: 45 },
+  { label: 'O', deg: 90 },
+  { label: 'SO', deg: 135 },
+  { label: 'S', deg: 180 },
+  { label: 'SW', deg: 225 },
+  { label: 'W', deg: 270 },
+  { label: 'NW', deg: 315 },
 ]
 
 export function FigureControls({ sessionId: _ }: { sessionId: string }) {
@@ -30,104 +35,112 @@ export function FigureControls({ sessionId: _ }: { sessionId: string }) {
   const figure = figures.find((f) => f.id === selectedId)
   if (!figure) return null
 
-  function handleUpdate(updates: Partial<Figure>) {
-    if (!figure) return
-    updateFigure(figure.id, updates)
-  }
-
-  function handleDelete() {
-    if (!figure) return
-    removeFigure(figure.id)
-    selectFigure(null)
-  }
-
-  function handleRotate(delta: number) {
-    const newRotation = ((figure!.rotation + delta) % 360 + 360) % 360
-    handleUpdate({ rotation: newRotation })
+  function up(updates: Partial<Figure>) {
+    updateFigure(figure!.id, updates)
   }
 
   const isConnecting = connectingFrom === figure.id
 
   return (
-    <div className="flex flex-col gap-3">
-      <span className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest px-1">
-        Ausgewählt
-      </span>
+    <div className="flex flex-col gap-4">
+      {/* Name */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
+          Name / Rolle
+        </label>
+        <Input
+          value={figure.label}
+          onChange={(e) => up({ label: e.target.value })}
+          placeholder="z.B. Vater, Mutter, Ich…"
+          className="h-9 text-sm bg-white/80 border-white/80"
+          autoFocus
+        />
+      </div>
 
-      {/* Label */}
-      <Input
-        value={figure.label}
-        onChange={(e) => handleUpdate({ label: e.target.value })}
-        placeholder="Name oder Rolle..."
-        className="h-8 text-sm bg-white/70 border-white/80 focus:bg-white"
-      />
+      {/* Farbe */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
+          Bedeutung / Farbe
+        </label>
+        <div className="grid grid-cols-5 gap-1.5">
+          {COLORS.map(({ hex, role }) => (
+            <button
+              key={hex}
+              onClick={() => up({ color: hex })}
+              title={role}
+              className={[
+                'w-full aspect-square rounded-full border-2 transition-all hover:scale-110',
+                figure.color === hex
+                  ? 'border-[#3d2b1a] scale-110 shadow-md'
+                  : 'border-white/60 hover:border-white',
+              ].join(' ')}
+              style={{ backgroundColor: hex }}
+            />
+          ))}
+        </div>
+        <p className="text-[10px] text-[#1F4045]/40">
+          {COLORS.find(c => c.hex === figure.color)?.role ?? ''}
+        </p>
+      </div>
 
-      {/* Color */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {COLORS.map(({ hex, label }) => (
+      {/* Blickrichtung */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
+          Blickrichtung
+        </label>
+        <div className="grid grid-cols-4 gap-1">
+          {ROTATION_PRESETS.map(({ label, deg }) => (
+            <button
+              key={label}
+              onClick={() => up({ rotation: deg })}
+              className={[
+                'py-1.5 text-[11px] rounded-lg border transition-all',
+                Math.abs(figure.rotation - deg) < 5
+                  ? 'bg-[#1F4045] text-white border-[#1F4045]'
+                  : 'bg-white/60 border-white/80 text-[#1F4045]/60 hover:bg-white/90',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 mt-1">
           <button
-            key={hex}
-            onClick={() => handleUpdate({ color: hex })}
-            title={label}
-            className={`w-full aspect-square rounded-full border-2 transition-all hover:scale-110 ${
-              figure.color === hex
-                ? 'border-[#1F4045] scale-110 shadow-md'
-                : 'border-transparent hover:border-white'
-            }`}
-            style={{ backgroundColor: hex }}
-          />
-        ))}
-      </div>
-
-      {/* Shape */}
-      <div className="grid grid-cols-2 gap-1">
-        {SHAPES.map(({ shape, label }) => (
+            onClick={() => up({ rotation: ((figure.rotation - 15) + 360) % 360 })}
+            className="flex-1 py-1.5 text-base rounded-lg bg-white/60 border border-white/80 hover:bg-white/90 transition-all text-[#1F4045]/60"
+          >↺</button>
+          <span className="text-[11px] tabular-nums text-[#1F4045]/50 w-10 text-center">{Math.round(figure.rotation)}°</span>
           <button
-            key={shape}
-            onClick={() => handleUpdate({ shape })}
-            className={`px-2 py-1.5 text-[11px] rounded-lg border transition-all ${
-              figure.shape === shape
-                ? 'bg-[#1F4045] text-white border-[#1F4045]'
-                : 'bg-white/60 border-white/80 text-[#1F4045]/70 hover:bg-white/90'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+            onClick={() => up({ rotation: (figure.rotation + 15) % 360 })}
+            className="flex-1 py-1.5 text-base rounded-lg bg-white/60 border border-white/80 hover:bg-white/90 transition-all text-[#1F4045]/60"
+          >↻</button>
+        </div>
       </div>
 
-      {/* Rotation */}
-      <div className="flex items-center gap-1.5 bg-white/60 rounded-lg px-2 py-1.5">
-        <span className="text-[10px] text-[#1F4045]/50 flex-1">Blickrichtung</span>
+      {/* Verbinden */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
+          Beziehung
+        </label>
         <button
-          className="w-6 h-6 rounded flex items-center justify-center hover:bg-white text-[#1F4045]/60 hover:text-[#1F4045] text-base"
-          onClick={() => handleRotate(-15)}
-        >↺</button>
-        <span className="text-[11px] tabular-nums w-8 text-center text-[#1F4045]/70">{Math.round(figure.rotation)}°</span>
-        <button
-          className="w-6 h-6 rounded flex items-center justify-center hover:bg-white text-[#1F4045]/60 hover:text-[#1F4045] text-base"
-          onClick={() => handleRotate(15)}
-        >↻</button>
+          onClick={() => setConnectingFrom(isConnecting ? null : figure.id)}
+          className={[
+            'w-full py-2 text-[12px] font-medium rounded-xl border transition-all',
+            isConnecting
+              ? 'bg-blue-500 text-white border-blue-500 shadow-md'
+              : 'bg-white/60 border-white/80 text-[#1F4045]/70 hover:bg-white',
+          ].join(' ')}
+        >
+          {isConnecting ? '→ Andere Figur anklicken' : 'Linie zu anderer Figur ziehen'}
+        </button>
       </div>
 
-      {/* Connect button */}
+      {/* Entfernen */}
       <button
-        onClick={() => setConnectingFrom(isConnecting ? null : figure.id)}
-        className={`w-full py-1.5 text-[11px] rounded-lg border transition-all ${
-          isConnecting
-            ? 'bg-blue-500 text-white border-blue-500'
-            : 'bg-white/60 border-white/80 text-[#1F4045]/70 hover:bg-white/90'
-        }`}
+        onClick={() => { removeFigure(figure.id); selectFigure(null) }}
+        className="w-full py-2 text-[12px] rounded-xl bg-red-50 text-red-400 border border-red-100 hover:bg-red-100 transition-colors"
       >
-        {isConnecting ? '→ Verbindung herstellen…' : 'Verbinden'}
-      </button>
-
-      {/* Delete */}
-      <button
-        onClick={handleDelete}
-        className="w-full py-1.5 text-[11px] rounded-lg bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 transition-colors"
-      >
-        Entfernen
+        Figur entfernen
       </button>
     </div>
   )

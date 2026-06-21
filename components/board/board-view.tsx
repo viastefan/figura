@@ -9,10 +9,26 @@ import { FigureControls } from './figure-controls'
 import { SnapshotPanel } from './snapshot-panel'
 import { ConnectionsLayer } from './connections-layer'
 import { AiPanel } from './ai-panel'
-import type { Session, Figure, Shape } from '@/types/database'
+import type { Session, Figure } from '@/types/database'
 import Link from 'next/link'
 
-type Tab = 'figuren' | 'ausgewaehlt' | 'snapshots' | 'ki'
+type Tab = 'figuren' | 'bearbeiten' | 'verlauf' | 'ki'
+
+// "Ich"-marker — always in center, not draggable, just orientation
+function IchMarker() {
+  return (
+    <div
+      className="absolute flex flex-col items-center pointer-events-none select-none"
+      style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+    >
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" fill="none" stroke="#3d2b1a" strokeWidth="1" strokeDasharray="3 3" opacity="0.3" />
+        <circle cx="20" cy="20" r="3" fill="#3d2b1a" opacity="0.25" />
+      </svg>
+      <span className="text-[10px] font-medium text-[#3d2b1a]/40 mt-0.5 tracking-wide">Mitte</span>
+    </div>
+  )
+}
 
 export function BoardView({
   session,
@@ -23,70 +39,75 @@ export function BoardView({
   initialFigures: Figure[]
   isOwner: boolean
 }) {
-  const { figures, setFigures, addFigure, updateFigure, selectFigure, getMaxZIndex, selectedId, connectingFrom } =
-    useBoardStore()
+  const {
+    figures, setFigures, addFigure, updateFigure, selectFigure,
+    getMaxZIndex, selectedId, connectingFrom, setConnectingFrom,
+  } = useBoardStore()
+
   const [tab, setTab] = useState<Tab>('figuren')
 
-  useEffect(() => {
-    setFigures(initialFigures)
-  }, [initialFigures, setFigures])
+  useEffect(() => { setFigures(initialFigures) }, [initialFigures, setFigures])
+  useEffect(() => { if (selectedId) setTab('bearbeiten') }, [selectedId])
 
-  // Auto-switch to "ausgewaehlt" tab when something is selected
-  useEffect(() => {
-    if (selectedId) setTab('ausgewaehlt')
-  }, [selectedId])
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 3 } }))
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, delta } = event
+    const fig = figures.find((f) => f.id === active.id)
+    if (!fig) return
+    updateFigure(fig.id, {
+      x: Math.max(0, fig.x + delta.x),
+      y: Math.max(0, fig.y + delta.y),
+      z_index: getMaxZIndex() + 1,
+    })
+  }, [figures, updateFigure, getMaxZIndex])
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, delta } = event
-      const figure = figures.find((f) => f.id === active.id)
-      if (!figure) return
-      updateFigure(figure.id, {
-        x: Math.max(0, figure.x + delta.x),
-        y: Math.max(0, figure.y + delta.y),
-        z_index: getMaxZIndex() + 1,
-      })
-    },
-    [figures, updateFigure, getMaxZIndex]
-  )
-
-  function handleAddFigure(shape: Shape, color: string) {
+  function handleAddFigure(color: string) {
+    // Always add as a person (circle = Mensch)
     const fig: Figure = {
       id: crypto.randomUUID(),
       session_id: session.id,
-      shape,
+      shape: 'circle',
       color,
       label: '',
-      x: 320 + Math.random() * 300,
-      y: 160 + Math.random() * 200,
+      x: 400 + (Math.random() - 0.5) * 200,
+      y: 250 + (Math.random() - 0.5) * 120,
       rotation: 0,
       z_index: getMaxZIndex() + 1,
       updated_at: new Date().toISOString(),
     }
     addFigure(fig)
     selectFigure(fig.id)
+    setTab('bearbeiten')
   }
 
   function handleBoardClick() {
-    selectFigure(null)
+    if (connectingFrom) {
+      setConnectingFrom(null)
+    } else {
+      selectFigure(null)
+    }
   }
 
-  const tabs: { id: Tab; label: string; show?: boolean }[] = [
+  const TABS: { id: Tab; label: string }[] = [
     { id: 'figuren', label: 'Figuren' },
-    { id: 'ausgewaehlt', label: 'Bearbeiten', show: !!selectedId },
-    { id: 'snapshots', label: 'Verlauf' },
+    { id: 'bearbeiten', label: 'Bearbeiten' },
+    { id: 'verlauf', label: 'Verlauf' },
     { id: 'ki', label: '✦ KI' },
   ]
 
   return (
     <div className="flex flex-1 flex-col" style={{ height: 'calc(100vh - 57px)' }}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b px-5 py-2 bg-white/70 backdrop-blur-md">
+      <div className="flex items-center justify-between border-b border-[#C9A96E]/20 px-5 h-11 bg-white/70 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-sm text-[#1F4045]/50 hover:text-[#1F4045] transition-colors flex items-center gap-1">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          <Link
+            href="/dashboard"
+            className="text-sm text-[#1F4045]/50 hover:text-[#1F4045] transition-colors flex items-center gap-1"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
             Übersicht
           </Link>
           <span className="text-[#1F4045]/20">·</span>
@@ -94,115 +115,114 @@ export function BoardView({
         </div>
         <div className="flex items-center gap-2">
           {connectingFrom && (
-            <span className="text-[11px] text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full animate-pulse">
-              → Ziel-Figur anklicken
+            <span className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full">
+              Ziel-Figur anklicken — oder Brett klicken zum Abbrechen
             </span>
           )}
-          <span className="text-[11px] text-[#1F4045]/40 bg-[#C9A96E]/10 px-2.5 py-1 rounded-full">
+          <span className="text-[11px] text-[#1F4045]/40 tabular-nums">
             {figures.length} {figures.length === 1 ? 'Figur' : 'Figuren'}
           </span>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
+        {/* ── Sidebar ── */}
         <div
-          className="w-60 flex flex-col border-r overflow-hidden"
-          style={{ background: 'rgba(245,238,224,0.85)', backdropFilter: 'blur(12px)' }}
+          className="w-56 flex flex-col border-r border-[#C9A96E]/20 shrink-0"
+          style={{ background: 'rgba(250,246,238,0.95)', backdropFilter: 'blur(12px)' }}
         >
-          {/* Tab bar */}
-          <div className="flex border-b border-[#C9A96E]/20 overflow-x-auto">
-            {tabs.filter(t => t.show !== false).map((t) => (
+          {/* Tabs */}
+          <div className="flex border-b border-[#C9A96E]/20">
+            {TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex-1 min-w-0 px-2 py-2.5 text-[10px] font-semibold transition-all whitespace-nowrap ${
+                className={[
+                  'flex-1 py-2.5 text-[10px] font-semibold transition-all',
                   tab === t.id
                     ? 'text-[#1F4045] border-b-2 border-[#C9A96E]'
-                    : 'text-[#1F4045]/40 hover:text-[#1F4045]/70'
-                }`}
+                    : 'text-[#1F4045]/35 hover:text-[#1F4045]/60',
+                ].join(' ')}
               >
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* Tab content */}
-          <div className="flex-1 overflow-y-auto p-3">
-            {tab === 'figuren' && <FigurePalette onAdd={handleAddFigure} />}
-            {tab === 'ausgewaehlt' && selectedId && <FigureControls sessionId={session.id} />}
-            {tab === 'ausgewaehlt' && !selectedId && (
-              <div className="flex flex-col items-center justify-center h-32 text-center">
-                <p className="text-[11px] text-[#1F4045]/40">Figur auswählen um sie zu bearbeiten</p>
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            {tab === 'figuren' && (
+              <FigurePalette onAdd={handleAddFigure} />
+            )}
+            {tab === 'bearbeiten' && selectedId && (
+              <FigureControls sessionId={session.id} />
+            )}
+            {tab === 'bearbeiten' && !selectedId && (
+              <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
+                <svg width="32" height="32" viewBox="0 0 56 64" fill="none" className="opacity-20">
+                  <circle cx="28" cy="23" r="10" fill="#3d2b1a"/>
+                  <path d="M14 48 C14 37 42 37 42 48 L42 58 C42 61 40 63 37 63 L19 63 C16 63 14 61 14 58 Z" fill="#3d2b1a"/>
+                </svg>
+                <p className="text-[11px] text-[#1F4045]/40 leading-relaxed">
+                  Figur auf dem Brett anklicken um sie zu bearbeiten
+                </p>
               </div>
             )}
-            {tab === 'snapshots' && <SnapshotPanel sessionId={session.id} />}
+            {tab === 'verlauf' && <SnapshotPanel sessionId={session.id} />}
             {tab === 'ki' && <AiPanel sessionTitle={session.title} />}
           </div>
         </div>
 
-        {/* Board canvas */}
+        {/* ── Board Canvas ── */}
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div
             className="flex-1 relative overflow-auto"
             onClick={handleBoardClick}
             style={{
-              background: `
-                radial-gradient(ellipse at 30% 20%, rgba(210,180,140,0.15) 0%, transparent 60%),
-                radial-gradient(ellipse at 70% 80%, rgba(160,130,100,0.1) 0%, transparent 60%),
-                linear-gradient(160deg, #e8d5b0 0%, #dcc890 40%, #d4b87a 100%)
-              `,
+              background: 'linear-gradient(160deg, #ede0c4 0%, #e2cc9a 45%, #d8bc80 100%)',
             }}
           >
-            {/* Wood grain texture overlay */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                backgroundImage: `
-                  repeating-linear-gradient(
-                    88deg,
-                    transparent 0px,
-                    transparent 18px,
-                    rgba(139,90,43,0.025) 18px,
-                    rgba(139,90,43,0.025) 19px
-                  ),
-                  repeating-linear-gradient(
-                    92deg,
-                    transparent 0px,
-                    transparent 32px,
-                    rgba(139,90,43,0.015) 32px,
-                    rgba(139,90,43,0.015) 33px
-                  )
-                `,
-              }}
-            />
-
-            {/* Board frame — oval/round */}
-            <div className="absolute inset-10 pointer-events-none" style={{
-              border: '3px solid rgba(139,90,43,0.18)',
-              borderRadius: '48% 52% 50% 50% / 44% 44% 56% 56%',
-              boxShadow: 'inset 0 2px 20px rgba(139,90,43,0.08), 0 0 0 1px rgba(255,255,255,0.3)',
+            {/* Wood grain */}
+            <div className="absolute inset-0 pointer-events-none" style={{
+              backgroundImage: [
+                'repeating-linear-gradient(89deg, transparent 0px, transparent 22px, rgba(100,60,20,0.022) 22px, rgba(100,60,20,0.022) 23px)',
+                'repeating-linear-gradient(91deg, transparent 0px, transparent 38px, rgba(100,60,20,0.015) 38px, rgba(100,60,20,0.015) 39px)',
+              ].join(', '),
             }} />
 
-            <div className="min-w-[1200px] min-h-[800px] relative">
-              {/* SVG connections layer */}
+            <div className="min-w-[1100px] min-h-[750px] relative">
+              {/* Oval board frame */}
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  top: '6%', left: '4%', right: '4%', bottom: '6%',
+                  border: '2px solid rgba(80,45,15,0.2)',
+                  borderRadius: '50%',
+                  boxShadow: 'inset 0 3px 30px rgba(80,45,15,0.06), inset 0 -2px 10px rgba(80,45,15,0.04)',
+                }}
+              />
+
+              {/* Subtle center marker */}
+              <IchMarker />
+
+              {/* SVG connections */}
               <ConnectionsLayer />
 
               {/* Figures */}
-              {figures.map((figure) => (
-                <BoardFigure key={figure.id} figure={figure} />
+              {figures.map((fig) => (
+                <BoardFigure key={fig.id} figure={fig} />
               ))}
 
+              {/* Empty state */}
               {figures.length === 0 && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="text-center space-y-3 opacity-30">
-                    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" className="mx-auto">
-                      <circle cx="20" cy="18" r="9" stroke="#5C3D1E" strokeWidth="1.5" />
-                      <circle cx="38" cy="30" r="9" stroke="#5C3D1E" strokeWidth="1.5" />
-                      <line x1="28" y1="22" x2="32" y2="26" stroke="#5C3D1E" strokeWidth="1.5" strokeDasharray="3 2" />
+                  <div className="text-center space-y-2 opacity-25">
+                    <svg width="52" height="60" viewBox="0 0 56 64" fill="none" className="mx-auto">
+                      <polygon points="28,1 34,11 22,11" fill="#3d2b1a" opacity="0.65"/>
+                      <circle cx="28" cy="23" r="10" fill="#3d2b1a"/>
+                      <path d="M14 48 C14 37 42 37 42 48 L42 58 C42 61 40 63 37 63 L19 63 C16 63 14 61 14 58 Z" fill="#3d2b1a"/>
                     </svg>
-                    <p className="text-sm font-medium text-[#5C3D1E]">Systembrett ist leer</p>
-                    <p className="text-xs text-[#5C3D1E]">Figuren aus der Palette hinzufügen</p>
+                    <p className="text-sm font-medium text-[#3d2b1a]">Noch keine Figuren</p>
+                    <p className="text-xs text-[#3d2b1a]">Links eine Farbe wählen um zu beginnen</p>
                   </div>
                 </div>
               )}
