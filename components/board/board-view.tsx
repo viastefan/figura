@@ -9,8 +9,6 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useBoardStore } from '@/lib/store/board-store'
-import { createClient } from '@/lib/supabase/client'
-import { useRealtimeFigures } from '@/lib/realtime/use-realtime-figures'
 import { BoardFigure } from './board-figure'
 import { FigurePalette } from './figure-palette'
 import { FigureControls } from './figure-controls'
@@ -29,13 +27,10 @@ export function BoardView({
 }) {
   const { figures, setFigures, addFigure, updateFigure, selectFigure, getMaxZIndex } =
     useBoardStore()
-  const supabase = createClient()
 
   useEffect(() => {
     setFigures(initialFigures)
   }, [initialFigures, setFigures])
-
-  useRealtimeFigures(session.id)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -44,44 +39,31 @@ export function BoardView({
   )
 
   const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
+    (event: DragEndEvent) => {
       const { active, delta } = event
       const figure = figures.find((f) => f.id === active.id)
       if (!figure) return
-
       const newX = Math.max(0, figure.x + delta.x)
       const newY = Math.max(0, figure.y + delta.y)
-
       updateFigure(figure.id, { x: newX, y: newY })
-
-      await supabase
-        .from('figures')
-        .update({
-          x: newX,
-          y: newY,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', figure.id)
     },
-    [figures, updateFigure, supabase]
+    [figures, updateFigure]
   )
 
-  async function handleAddFigure(shape: Shape, color: string) {
-    const newFigure: Omit<Figure, 'updated_at'> & { updated_at?: string } = {
+  function handleAddFigure(shape: Shape, color: string) {
+    const newFigure: Figure = {
       id: crypto.randomUUID(),
       session_id: session.id,
       shape,
       color,
       label: '',
-      x: 300 + Math.random() * 200,
-      y: 200 + Math.random() * 200,
+      x: 280 + Math.random() * 240,
+      y: 180 + Math.random() * 200,
       rotation: 0,
       z_index: getMaxZIndex() + 1,
+      updated_at: new Date().toISOString(),
     }
-
-    addFigure(newFigure as Figure)
-
-    await supabase.from('figures').insert(newFigure)
+    addFigure(newFigure)
   }
 
   function handleBoardClick() {
@@ -93,24 +75,23 @@ export function BoardView({
       {/* Session toolbar */}
       <div className="flex items-center justify-between border-b px-4 py-2 bg-white/80 backdrop-blur">
         <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            &larr; Zurück
+          <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
+            ← Zurück
           </Link>
           <span className="text-sm font-medium">{session.title}</span>
         </div>
         {isOwner && (
           <div className="flex items-center gap-2">
-            <CopyLinkButton token={session.client_token} />
+            <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+              Demo — Echtzeit-Sync kommt bald
+            </span>
           </div>
         )}
       </div>
 
       {/* Board area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar: palette + controls */}
+        {/* Sidebar */}
         <div className="w-56 border-r p-3 flex flex-col gap-3 overflow-y-auto bg-white/50">
           <FigurePalette onAdd={handleAddFigure} />
           <FigureControls sessionId={session.id} />
@@ -122,12 +103,11 @@ export function BoardView({
           <div
             className="flex-1 relative overflow-auto"
             style={{
-              background:
-                'linear-gradient(135deg, #f5e6c8 0%, #e8d5a8 50%, #dcc89a 100%)',
+              background: 'linear-gradient(135deg, #f5e6c8 0%, #e8d5a8 50%, #dcc89a 100%)',
               backgroundImage: `
                 linear-gradient(135deg, #f5e6c8 0%, #e8d5a8 50%, #dcc89a 100%),
-                repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(0,0,0,0.02) 40px, rgba(0,0,0,0.02) 41px),
-                repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(0,0,0,0.02) 40px, rgba(0,0,0,0.02) 41px)
+                repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(0,0,0,0.025) 40px, rgba(0,0,0,0.025) 41px),
+                repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(0,0,0,0.025) 40px, rgba(0,0,0,0.025) 41px)
               `,
             }}
             onClick={handleBoardClick}
@@ -136,26 +116,24 @@ export function BoardView({
               {figures.map((figure) => (
                 <BoardFigure key={figure.id} figure={figure} />
               ))}
+
+              {figures.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <div className="text-center space-y-2 opacity-40">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="mx-auto">
+                      <circle cx="8" cy="8" r="4" stroke="#1F4045" strokeWidth="1.5" />
+                      <circle cx="16" cy="14" r="4" stroke="#1F4045" strokeWidth="1.5" />
+                      <path d="M8 12v4M8 16h4" stroke="#C9A96E" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                    <p className="text-sm font-medium text-[#1F4045]">Systembrett ist leer</p>
+                    <p className="text-xs text-[#1F4045]">Figuren aus der Palette hinzufügen</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </DndContext>
       </div>
     </div>
-  )
-}
-
-function CopyLinkButton({ token }: { token: string }) {
-  async function handleCopy() {
-    const url = `${window.location.origin}/join/${token}`
-    await navigator.clipboard.writeText(url)
-  }
-
-  return (
-    <button
-      onClick={handleCopy}
-      className="text-xs px-3 py-1.5 rounded border border-border hover:bg-muted transition-colors"
-    >
-      Einladungslink kopieren
-    </button>
   )
 }

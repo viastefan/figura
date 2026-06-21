@@ -1,7 +1,6 @@
 'use client'
 
 import { useBoardStore } from '@/lib/store/board-store'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Figure, Shape } from '@/types/database'
@@ -9,28 +8,21 @@ import type { Figure, Shape } from '@/types/database'
 const COLORS = ['#E8B4B8', '#A8C5DA', '#B5D5A7', '#F2D479', '#C4A6E0', '#F5C5A3']
 const SHAPES: Shape[] = ['circle', 'square', 'triangle', 'diamond']
 
-export function FigureControls({ sessionId }: { sessionId: string }) {
-  const { figures, selectedId, updateFigure, removeFigure, selectFigure } =
-    useBoardStore()
-  const supabase = createClient()
+export function FigureControls({ sessionId: _ }: { sessionId: string }) {
+  const { figures, selectedId, updateFigure, removeFigure, selectFigure } = useBoardStore()
 
   const figure = figures.find((f) => f.id === selectedId)
   if (!figure) return null
 
-  async function handleUpdate(updates: Partial<Figure>) {
+  function handleUpdate(updates: Partial<Figure>) {
     if (!figure) return
     updateFigure(figure.id, updates)
-    await supabase
-      .from('figures')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', figure.id)
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!figure) return
     removeFigure(figure.id)
     selectFigure(null)
-    await supabase.from('figures').delete().eq('id', figure.id)
   }
 
   function handleRotate(delta: number) {
@@ -64,7 +56,7 @@ export function FigureControls({ sessionId }: { sessionId: string }) {
         ))}
       </div>
 
-      <div className="flex gap-1.5">
+      <div className="flex gap-1.5 flex-wrap">
         {SHAPES.map((shape) => (
           <button
             key={shape}
@@ -75,26 +67,16 @@ export function FigureControls({ sessionId }: { sessionId: string }) {
                 : 'border-border hover:bg-muted'
             }`}
           >
-            {shape === 'circle'
-              ? 'Kreis'
-              : shape === 'square'
-                ? 'Quadrat'
-                : shape === 'triangle'
-                  ? 'Dreieck'
-                  : 'Raute'}
+            {shape === 'circle' ? 'Kreis' : shape === 'square' ? 'Quadrat' : shape === 'triangle' ? 'Dreieck' : 'Raute'}
           </button>
         ))}
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Blickrichtung</span>
-        <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handleRotate(-15)}>
-          ↺
-        </Button>
+        <span className="text-xs text-muted-foreground">Richtung</span>
+        <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handleRotate(-15)}>↺</Button>
         <span className="text-xs tabular-nums w-8 text-center">{Math.round(figure.rotation)}°</span>
-        <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handleRotate(15)}>
-          ↻
-        </Button>
+        <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handleRotate(15)}>↻</Button>
       </div>
 
       <Button size="sm" variant="destructive" onClick={handleDelete} className="h-7 text-xs">
