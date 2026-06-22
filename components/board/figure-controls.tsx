@@ -1,7 +1,6 @@
 'use client'
 
 import { useBoardStore } from '@/lib/store/board-store'
-import { Input } from '@/components/ui/input'
 import type { Figure } from '@/types/database'
 
 const COLORS: { hex: string; role: string }[] = [
@@ -17,16 +16,24 @@ const COLORS: { hex: string; role: string }[] = [
   { hex: '#D4A5A5', role: 'Verlust' },
 ]
 
-const ROTATION_PRESETS = [
-  { label: 'N', deg: 0 },
-  { label: 'NO', deg: 45 },
-  { label: 'O', deg: 90 },
-  { label: 'SO', deg: 135 },
-  { label: 'S', deg: 180 },
-  { label: 'SW', deg: 225 },
-  { label: 'W', deg: 270 },
-  { label: 'NW', deg: 315 },
+const COMPASS = [
+  { label: 'N', deg: 0 },   { label: 'NO', deg: 45 },
+  { label: 'O', deg: 90 },  { label: 'SO', deg: 135 },
+  { label: 'S', deg: 180 }, { label: 'SW', deg: 225 },
+  { label: 'W', deg: 270 }, { label: 'NW', deg: 315 },
 ]
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-bold uppercase tracking-widest text-[#1F4045]/40 mb-2">
+      {children}
+    </p>
+  )
+}
+
+function Divider() {
+  return <div className="h-px bg-[#1F4045]/8 my-4" />
+}
 
 export function FigureControls({ sessionId: _ }: { sessionId: string }) {
   const { figures, selectedId, updateFigure, removeFigure, selectFigure, connectingFrom, setConnectingFrom } =
@@ -40,105 +47,169 @@ export function FigureControls({ sessionId: _ }: { sessionId: string }) {
   }
 
   const isConnecting = connectingFrom === figure.id
+  const currentColorRole = COLORS.find(c => c.hex === figure.color)?.role ?? ''
+  const nearestCompass = COMPASS.reduce((prev, curr) =>
+    Math.abs(curr.deg - figure.rotation) < Math.abs(prev.deg - figure.rotation) ? curr : prev
+  )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col">
       {/* Name */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
-          Name / Rolle
-        </label>
-        <Input
-          value={figure.label}
-          onChange={(e) => up({ label: e.target.value })}
-          placeholder="z.B. Vater, Mutter, Ich…"
-          className="h-9 text-sm bg-white/80 border-white/80"
-          autoFocus
-        />
+      <SectionLabel>Name / Rolle</SectionLabel>
+      <input
+        value={figure.label}
+        onChange={(e) => up({ label: e.target.value })}
+        placeholder="z.B. Vater, Mutter, Ich…"
+        autoFocus
+        className="w-full h-10 px-3 text-[14px] rounded-xl border border-[#1F4045]/15 bg-white placeholder:text-[#1F4045]/30 text-[#1F4045] focus:outline-none focus:border-[#C9A96E] transition-colors"
+      />
+
+      <Divider />
+
+      {/* Farbe / Bedeutung */}
+      <SectionLabel>Bedeutung</SectionLabel>
+      {currentColorRole && (
+        <div
+          className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg"
+          style={{ background: `${figure.color}33`, border: `1px solid ${figure.color}66` }}
+        >
+          <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: figure.color }} />
+          <span className="text-[13px] font-semibold text-[#1F4045]">{currentColorRole}</span>
+        </div>
+      )}
+      <div className="grid grid-cols-5 gap-2">
+        {COLORS.map(({ hex, role }) => (
+          <button
+            key={hex}
+            title={role}
+            onClick={() => up({ color: hex })}
+            className="group relative"
+          >
+            <div
+              className={[
+                'w-full aspect-square rounded-full border-2 transition-all',
+                figure.color === hex
+                  ? 'scale-110 border-[#1F4045]'
+                  : 'border-transparent hover:border-white hover:scale-105',
+              ].join(' ')}
+              style={{ backgroundColor: hex, boxShadow: figure.color === hex ? '0 0 0 2px #1F4045' : `0 2px 6px ${hex}66` }}
+            />
+          </button>
+        ))}
       </div>
 
-      {/* Farbe */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
-          Bedeutung / Farbe
-        </label>
-        <div className="grid grid-cols-5 gap-1.5">
-          {COLORS.map(({ hex, role }) => (
-            <button
-              key={hex}
-              onClick={() => up({ color: hex })}
-              title={role}
-              className={[
-                'w-full aspect-square rounded-full border-2 transition-all hover:scale-110',
-                figure.color === hex
-                  ? 'border-[#3d2b1a] scale-110 shadow-md'
-                  : 'border-white/60 hover:border-white',
-              ].join(' ')}
-              style={{ backgroundColor: hex }}
-            />
-          ))}
-        </div>
-        <p className="text-[10px] text-[#1F4045]/40">
-          {COLORS.find(c => c.hex === figure.color)?.role ?? ''}
-        </p>
-      </div>
+      <Divider />
 
       {/* Blickrichtung */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
-          Blickrichtung
-        </label>
-        <div className="grid grid-cols-4 gap-1">
-          {ROTATION_PRESETS.map(({ label, deg }) => (
+      <SectionLabel>Blickrichtung</SectionLabel>
+      <div
+        className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-[#1F4045]/5"
+      >
+        <span className="text-lg">↑</span>
+        <span className="text-[13px] font-semibold text-[#1F4045]">{nearestCompass.label}</span>
+        <span className="text-[12px] text-[#1F4045]/40">({Math.round(figure.rotation)}°)</span>
+      </div>
+
+      {/* Compass grid */}
+      <div className="grid grid-cols-3 gap-1.5 mb-2">
+        {/* Row 1: NW, N, NO */}
+        {['NW', 'N', 'NO'].map(label => {
+          const c = COMPASS.find(x => x.label === label)!
+          const isActive = Math.abs(figure.rotation - c.deg) < 23
+          return (
             <button
               key={label}
-              onClick={() => up({ rotation: deg })}
+              onClick={() => up({ rotation: c.deg })}
               className={[
-                'py-1.5 text-[11px] rounded-lg border transition-all',
-                Math.abs(figure.rotation - deg) < 5
+                'py-2 text-[12px] font-semibold rounded-lg border transition-all',
+                isActive
                   ? 'bg-[#1F4045] text-white border-[#1F4045]'
-                  : 'bg-white/60 border-white/80 text-[#1F4045]/60 hover:bg-white/90',
+                  : 'bg-white border-[#1F4045]/12 text-[#1F4045]/60 hover:border-[#1F4045]/30 hover:text-[#1F4045]',
               ].join(' ')}
             >
               {label}
             </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          <button
-            onClick={() => up({ rotation: ((figure.rotation - 15) + 360) % 360 })}
-            className="flex-1 py-1.5 text-base rounded-lg bg-white/60 border border-white/80 hover:bg-white/90 transition-all text-[#1F4045]/60"
-          >↺</button>
-          <span className="text-[11px] tabular-nums text-[#1F4045]/50 w-10 text-center">{Math.round(figure.rotation)}°</span>
-          <button
-            onClick={() => up({ rotation: (figure.rotation + 15) % 360 })}
-            className="flex-1 py-1.5 text-base rounded-lg bg-white/60 border border-white/80 hover:bg-white/90 transition-all text-[#1F4045]/60"
-          >↻</button>
-        </div>
+          )
+        })}
+        {/* Row 2: W, center, O */}
+        {['W', null, 'O'].map((label, i) => {
+          if (!label) return (
+            <div key={i} className="flex items-center justify-center">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#1F4045]/20" />
+            </div>
+          )
+          const c = COMPASS.find(x => x.label === label)!
+          const isActive = Math.abs((figure.rotation - c.deg + 360) % 360) < 23
+          return (
+            <button
+              key={label}
+              onClick={() => up({ rotation: c.deg })}
+              className={[
+                'py-2 text-[12px] font-semibold rounded-lg border transition-all',
+                isActive
+                  ? 'bg-[#1F4045] text-white border-[#1F4045]'
+                  : 'bg-white border-[#1F4045]/12 text-[#1F4045]/60 hover:border-[#1F4045]/30 hover:text-[#1F4045]',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          )
+        })}
+        {/* Row 3: SW, S, SO */}
+        {['SW', 'S', 'SO'].map(label => {
+          const c = COMPASS.find(x => x.label === label)!
+          const isActive = Math.abs((figure.rotation - c.deg + 360) % 360) < 23
+          return (
+            <button
+              key={label}
+              onClick={() => up({ rotation: c.deg })}
+              className={[
+                'py-2 text-[12px] font-semibold rounded-lg border transition-all',
+                isActive
+                  ? 'bg-[#1F4045] text-white border-[#1F4045]'
+                  : 'bg-white border-[#1F4045]/12 text-[#1F4045]/60 hover:border-[#1F4045]/30 hover:text-[#1F4045]',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
-
-      {/* Verbinden */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest">
-          Beziehung
-        </label>
+      {/* Fine-tune */}
+      <div className="flex items-center gap-2">
         <button
-          onClick={() => setConnectingFrom(isConnecting ? null : figure.id)}
-          className={[
-            'w-full py-2 text-[12px] font-medium rounded-xl border transition-all',
-            isConnecting
-              ? 'bg-blue-500 text-white border-blue-500 shadow-md'
-              : 'bg-white/60 border-white/80 text-[#1F4045]/70 hover:bg-white',
-          ].join(' ')}
-        >
-          {isConnecting ? '→ Andere Figur anklicken' : 'Linie zu anderer Figur ziehen'}
-        </button>
+          onClick={() => up({ rotation: ((figure.rotation - 5) + 360) % 360 })}
+          className="flex-1 h-8 rounded-lg border border-[#1F4045]/12 bg-white text-[#1F4045]/60 hover:text-[#1F4045] text-base transition-colors"
+        >↺</button>
+        <span className="text-[11px] text-[#1F4045]/40 tabular-nums w-8 text-center">5°</span>
+        <button
+          onClick={() => up({ rotation: (figure.rotation + 5) % 360 })}
+          className="flex-1 h-8 rounded-lg border border-[#1F4045]/12 bg-white text-[#1F4045]/60 hover:text-[#1F4045] text-base transition-colors"
+        >↻</button>
       </div>
 
-      {/* Entfernen */}
+      <Divider />
+
+      {/* Beziehung */}
+      <SectionLabel>Beziehung</SectionLabel>
+      <button
+        onClick={() => setConnectingFrom(isConnecting ? null : figure.id)}
+        className={[
+          'w-full h-10 rounded-xl text-[13px] font-semibold border transition-all',
+          isConnecting
+            ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/25'
+            : 'bg-white border-[#1F4045]/15 text-[#1F4045] hover:border-[#1F4045]/30',
+        ].join(' ')}
+      >
+        {isConnecting ? '→ Andere Figur anklicken' : 'Verbindungslinie ziehen'}
+      </button>
+
+      <Divider />
+
+      {/* Löschen */}
       <button
         onClick={() => { removeFigure(figure.id); selectFigure(null) }}
-        className="w-full py-2 text-[12px] rounded-xl bg-red-50 text-red-400 border border-red-100 hover:bg-red-100 transition-colors"
+        className="w-full h-9 rounded-xl text-[13px] text-red-500 border border-red-100 bg-red-50 hover:bg-red-100 transition-colors"
       >
         Figur entfernen
       </button>

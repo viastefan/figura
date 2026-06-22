@@ -14,22 +14,6 @@ import Link from 'next/link'
 
 type Tab = 'figuren' | 'bearbeiten' | 'verlauf' | 'ki'
 
-// "Ich"-marker — always in center, not draggable, just orientation
-function IchMarker() {
-  return (
-    <div
-      className="absolute flex flex-col items-center pointer-events-none select-none"
-      style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
-    >
-      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-        <circle cx="20" cy="20" r="18" fill="none" stroke="#3d2b1a" strokeWidth="1" strokeDasharray="3 3" opacity="0.3" />
-        <circle cx="20" cy="20" r="3" fill="#3d2b1a" opacity="0.25" />
-      </svg>
-      <span className="text-[10px] font-medium text-[#3d2b1a]/40 mt-0.5 tracking-wide">Mitte</span>
-    </div>
-  )
-}
-
 export function BoardView({
   session,
   initialFigures,
@@ -45,6 +29,8 @@ export function BoardView({
   } = useBoardStore()
 
   const [tab, setTab] = useState<Tab>('figuren')
+  const [sessionNote, setSessionNote] = useState('')
+  const [showNote, setShowNote] = useState(false)
 
   useEffect(() => { setFigures(initialFigures) }, [initialFigures, setFigures])
   useEffect(() => { if (selectedId) setTab('bearbeiten') }, [selectedId])
@@ -63,15 +49,14 @@ export function BoardView({
   }, [figures, updateFigure, getMaxZIndex])
 
   function handleAddFigure(color: string) {
-    // Always add as a person (circle = Mensch)
     const fig: Figure = {
       id: crypto.randomUUID(),
       session_id: session.id,
       shape: 'circle',
       color,
       label: '',
-      x: 400 + (Math.random() - 0.5) * 200,
-      y: 250 + (Math.random() - 0.5) * 120,
+      x: 380 + (Math.random() - 0.5) * 160,
+      y: 220 + (Math.random() - 0.5) * 100,
       rotation: 0,
       z_index: getMaxZIndex() + 1,
       updated_at: new Date().toISOString(),
@@ -82,91 +67,121 @@ export function BoardView({
   }
 
   function handleBoardClick() {
-    if (connectingFrom) {
-      setConnectingFrom(null)
-    } else {
-      selectFigure(null)
-    }
+    if (connectingFrom) { setConnectingFrom(null); return }
+    selectFigure(null)
   }
 
-  const TABS: { id: Tab; label: string }[] = [
-    { id: 'figuren', label: 'Figuren' },
-    { id: 'bearbeiten', label: 'Bearbeiten' },
-    { id: 'verlauf', label: 'Verlauf' },
-    { id: 'ki', label: '✦ KI' },
+  const TABS: { id: Tab; label: string; icon: string }[] = [
+    { id: 'figuren', label: 'Figuren', icon: '⬡' },
+    { id: 'bearbeiten', label: 'Bearbeiten', icon: '✎' },
+    { id: 'verlauf', label: 'Verlauf', icon: '◎' },
+    { id: 'ki', label: 'KI', icon: '✦' },
   ]
 
   return (
-    <div className="flex flex-1 flex-col" style={{ height: 'calc(100vh - 57px)' }}>
-      {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-[#C9A96E]/20 px-5 h-11 bg-white/70 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="text-sm text-[#1F4045]/50 hover:text-[#1F4045] transition-colors flex items-center gap-1"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-            Übersicht
-          </Link>
-          <span className="text-[#1F4045]/20">·</span>
-          <span className="text-sm font-medium text-[#1F4045]">{session.title}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {connectingFrom && (
-            <span className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full">
-              Ziel-Figur anklicken — oder Brett klicken zum Abbrechen
-            </span>
-          )}
-          <span className="text-[11px] text-[#1F4045]/40 tabular-nums">
-            {figures.length} {figures.length === 1 ? 'Figur' : 'Figuren'}
+    <div className="flex flex-1 flex-col overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
+
+      {/* ── Top toolbar ── */}
+      <div
+        className="flex items-center gap-3 px-5 h-12 shrink-0 border-b"
+        style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(31,64,69,0.08)' }}
+      >
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5 text-[13px] text-[#1F4045]/50 hover:text-[#1F4045] transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          Übersicht
+        </Link>
+        <span style={{ color: 'rgba(31,64,69,0.15)' }}>|</span>
+        <span className="text-[13px] font-semibold text-[#1F4045] flex-1 truncate">{session.title}</span>
+
+        {/* Session note toggle */}
+        <button
+          onClick={() => setShowNote(!showNote)}
+          className={[
+            'flex items-center gap-1.5 text-[12px] px-3 h-7 rounded-full border transition-all',
+            showNote || sessionNote
+              ? 'bg-[#1F4045] text-white border-[#1F4045]'
+              : 'border-[#1F4045]/15 text-[#1F4045]/50 hover:border-[#1F4045]/30 hover:text-[#1F4045]',
+          ].join(' ')}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+            <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          Notiz
+        </button>
+
+        {connectingFrom && (
+          <span className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 px-3 h-7 flex items-center rounded-full">
+            Ziel-Figur anklicken · ESC zum Abbrechen
           </span>
-        </div>
+        )}
+
+        <span className="text-[12px] text-[#1F4045]/35 tabular-nums">
+          {figures.length} {figures.length === 1 ? 'Figur' : 'Figuren'}
+        </span>
       </div>
 
+      {/* Session note bar */}
+      {showNote && (
+        <div className="px-5 py-2 border-b flex items-center gap-3" style={{ background: '#fffdf8', borderColor: 'rgba(201,169,110,0.2)' }}>
+          <span className="text-[11px] font-semibold text-[#1F4045]/40 shrink-0">Sitzungsnotiz</span>
+          <input
+            value={sessionNote}
+            onChange={e => setSessionNote(e.target.value)}
+            placeholder="Thema der Sitzung, Beobachtungen, nächste Schritte…"
+            className="flex-1 text-[13px] text-[#1F4045] bg-transparent border-none outline-none placeholder:text-[#1F4045]/25"
+            autoFocus
+          />
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
+
         {/* ── Sidebar ── */}
         <div
-          className="w-56 flex flex-col border-r border-[#C9A96E]/20 shrink-0"
-          style={{ background: 'rgba(250,246,238,0.95)', backdropFilter: 'blur(12px)' }}
+          className="w-64 flex flex-col shrink-0 border-r overflow-hidden"
+          style={{ background: '#FAFAF8', borderColor: 'rgba(31,64,69,0.08)' }}
         >
-          {/* Tabs */}
-          <div className="flex border-b border-[#C9A96E]/20">
+          {/* Tab bar */}
+          <div className="flex border-b" style={{ borderColor: 'rgba(31,64,69,0.08)' }}>
             {TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={[
-                  'flex-1 py-2.5 text-[10px] font-semibold transition-all',
+                  'flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-all border-b-2',
                   tab === t.id
-                    ? 'text-[#1F4045] border-b-2 border-[#C9A96E]'
-                    : 'text-[#1F4045]/35 hover:text-[#1F4045]/60',
+                    ? 'border-[#C9A96E] text-[#1F4045]'
+                    : 'border-transparent text-[#1F4045]/35 hover:text-[#1F4045]/60',
                 ].join(' ')}
               >
-                {t.label}
+                <span className="text-[13px]">{t.icon}</span>
+                <span className="text-[9px] font-bold uppercase tracking-wide">{t.label}</span>
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-4">
-            {tab === 'figuren' && (
-              <FigurePalette onAdd={handleAddFigure} />
-            )}
-            {tab === 'bearbeiten' && selectedId && (
-              <FigureControls sessionId={session.id} />
-            )}
+          {/* Tab content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {tab === 'figuren' && <FigurePalette onAdd={handleAddFigure} />}
+
+            {tab === 'bearbeiten' && selectedId && <FigureControls sessionId={session.id} />}
             {tab === 'bearbeiten' && !selectedId && (
-              <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                <svg width="32" height="32" viewBox="0 0 56 64" fill="none" className="opacity-20">
-                  <circle cx="28" cy="23" r="10" fill="#3d2b1a"/>
-                  <path d="M14 48 C14 37 42 37 42 48 L42 58 C42 61 40 63 37 63 L19 63 C16 63 14 61 14 58 Z" fill="#3d2b1a"/>
+              <div className="flex flex-col items-center justify-center h-40 text-center gap-3">
+                <svg width="40" height="47" viewBox="0 0 68 80" fill="none" opacity={0.18}>
+                  <circle cx="34" cy="28" r="16" fill="#1F4045"/>
+                  <path d="M12 58 C12 44 56 44 56 58 L56 72 C56 75 54 77 51 77 L17 77 C14 77 12 75 12 72 Z" fill="#1F4045"/>
                 </svg>
-                <p className="text-[11px] text-[#1F4045]/40 leading-relaxed">
-                  Figur auf dem Brett anklicken um sie zu bearbeiten
+                <p className="text-[12px] text-[#1F4045]/40 leading-relaxed">
+                  Figur auf dem Brett<br/>anklicken
                 </p>
               </div>
             )}
+
             {tab === 'verlauf' && <SnapshotPanel sessionId={session.id} />}
             {tab === 'ki' && <AiPanel sessionTitle={session.title} />}
           </div>
@@ -178,33 +193,54 @@ export function BoardView({
             className="flex-1 relative overflow-auto"
             onClick={handleBoardClick}
             style={{
-              background: 'linear-gradient(160deg, #ede0c4 0%, #e2cc9a 45%, #d8bc80 100%)',
+              background: [
+                'radial-gradient(ellipse at 25% 30%, rgba(220,195,140,0.4) 0%, transparent 55%)',
+                'radial-gradient(ellipse at 75% 70%, rgba(190,160,100,0.3) 0%, transparent 55%)',
+                'linear-gradient(155deg, #ede0c4 0%, #dfc99a 50%, #d4b87a 100%)',
+              ].join(', '),
             }}
           >
-            {/* Wood grain */}
+            {/* Wood grain texture */}
             <div className="absolute inset-0 pointer-events-none" style={{
               backgroundImage: [
-                'repeating-linear-gradient(89deg, transparent 0px, transparent 22px, rgba(100,60,20,0.022) 22px, rgba(100,60,20,0.022) 23px)',
-                'repeating-linear-gradient(91deg, transparent 0px, transparent 38px, rgba(100,60,20,0.015) 38px, rgba(100,60,20,0.015) 39px)',
+                'repeating-linear-gradient(89.5deg, transparent 0px, transparent 24px, rgba(90,50,15,0.018) 24px, rgba(90,50,15,0.018) 25px)',
+                'repeating-linear-gradient(90.5deg, transparent 0px, transparent 40px, rgba(90,50,15,0.012) 40px, rgba(90,50,15,0.012) 41px)',
+                'repeating-linear-gradient(89deg, transparent 0px, transparent 70px, rgba(90,50,15,0.008) 70px, rgba(90,50,15,0.008) 71px)',
               ].join(', '),
             }} />
 
-            <div className="min-w-[1100px] min-h-[750px] relative">
-              {/* Oval board frame */}
+            <div className="min-w-[1100px] min-h-[740px] relative">
+
+              {/* Oval board boundary */}
               <div
                 className="absolute pointer-events-none"
                 style={{
-                  top: '6%', left: '4%', right: '4%', bottom: '6%',
-                  border: '2px solid rgba(80,45,15,0.2)',
+                  top: '5%', left: '3%', right: '3%', bottom: '5%',
                   borderRadius: '50%',
-                  boxShadow: 'inset 0 3px 30px rgba(80,45,15,0.06), inset 0 -2px 10px rgba(80,45,15,0.04)',
+                  border: '2px solid rgba(80,45,15,0.22)',
+                  boxShadow: [
+                    'inset 0 4px 40px rgba(80,45,15,0.06)',
+                    'inset 0 -2px 12px rgba(80,45,15,0.04)',
+                    '0 0 0 8px rgba(80,45,15,0.04)',
+                  ].join(', '),
                 }}
               />
 
-              {/* Subtle center marker */}
-              <IchMarker />
+              {/* Center mark */}
+              <div
+                className="absolute pointer-events-none flex flex-col items-center"
+                style={{ left: '50%', top: '50%', transform: 'translate(-50%,-50%)' }}
+              >
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="14" stroke="rgba(80,45,15,0.18)" strokeWidth="1" strokeDasharray="3 3" />
+                  <circle cx="16" cy="16" r="2.5" fill="rgba(80,45,15,0.2)" />
+                </svg>
+                <span className="text-[9px] font-semibold tracking-widest mt-0.5" style={{ color: 'rgba(80,45,15,0.25)' }}>
+                  MITTE
+                </span>
+              </div>
 
-              {/* SVG connections */}
+              {/* Connections */}
               <ConnectionsLayer />
 
               {/* Figures */}
@@ -214,15 +250,15 @@ export function BoardView({
 
               {/* Empty state */}
               {figures.length === 0 && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="text-center space-y-2 opacity-25">
-                    <svg width="52" height="60" viewBox="0 0 56 64" fill="none" className="mx-auto">
-                      <polygon points="28,1 34,11 22,11" fill="#3d2b1a" opacity="0.65"/>
-                      <circle cx="28" cy="23" r="10" fill="#3d2b1a"/>
-                      <path d="M14 48 C14 37 42 37 42 48 L42 58 C42 61 40 63 37 63 L19 63 C16 63 14 61 14 58 Z" fill="#3d2b1a"/>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center" style={{ opacity: 0.22 }}>
+                    <svg width="56" height="66" viewBox="0 0 68 80" fill="none" className="mx-auto mb-3">
+                      <polygon points="34,2 40,14 28,14" fill="#5c3d1e" opacity="0.7" />
+                      <circle cx="34" cy="28" r="16" fill="#5c3d1e" />
+                      <path d="M12 58 C12 44 56 44 56 58 L56 72 C56 75 54 77 51 77 L17 77 C14 77 12 75 12 72 Z" fill="#5c3d1e" />
                     </svg>
-                    <p className="text-sm font-medium text-[#3d2b1a]">Noch keine Figuren</p>
-                    <p className="text-xs text-[#3d2b1a]">Links eine Farbe wählen um zu beginnen</p>
+                    <p className="text-[15px] font-semibold text-[#5c3d1e]">Brett ist leer</p>
+                    <p className="text-[12px] text-[#5c3d1e] mt-1">Farbe links wählen → Figur erscheint hier</p>
                   </div>
                 </div>
               )}
