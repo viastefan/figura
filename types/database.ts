@@ -1,12 +1,7 @@
 export type Shape = 'circle' | 'square' | 'triangle' | 'diamond'
 export type SessionStatus = 'active' | 'archived'
-
-export interface Profile {
-  id: string
-  email: string
-  display_name: string | null
-  created_at: string
-}
+export type ConnectionStyle = 'solid' | 'dashed' | 'dotted'
+export type ConnectionSemantics = 'neutral' | 'strong' | 'conflict' | 'weak' | 'resource'
 
 export interface Session {
   id: string
@@ -35,8 +30,9 @@ export interface Connection {
   id: string
   fromId: string
   toId: string
-  style: 'solid' | 'dashed' | 'dotted'
+  style: ConnectionStyle
   color: string
+  semantics: ConnectionSemantics
 }
 
 export interface Snapshot {
@@ -44,5 +40,6 @@ export interface Snapshot {
   session_id: string
   note: string | null
   state: Figure[]
+  connections: Connection[]
   created_at: string
 }

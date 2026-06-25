@@ -94,6 +94,7 @@ export function BoardFigure({ figure }: { figure: Figure }) {
           toId: figure.id,
           style: 'solid',
           color: '#5c3d1e',
+          semantics: 'neutral',
         })
       }
       setConnectingFrom(null)
