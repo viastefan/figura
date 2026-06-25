@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useBoardStore } from '@/lib/store/board-store'
 import type { Figure } from '@/types/database'
 
-interface LocalSnapshot {
+interface Snap {
   id: string
   note: string | null
   state: Figure[]
@@ -13,76 +13,133 @@ interface LocalSnapshot {
 
 export function SnapshotPanel({ sessionId: _ }: { sessionId: string }) {
   const { figures, setFigures } = useBoardStore()
-  const [snapshots, setSnapshots] = useState<LocalSnapshot[]>([])
+  const [snaps, setSnaps] = useState<Snap[]>([])
   const [note, setNote] = useState('')
-  const [confirmLoad, setConfirmLoad] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
 
-  function handleSave() {
-    const snapshot: LocalSnapshot = {
+  function save() {
+    if (figures.length === 0) return
+    setSnaps(prev => [{
       id: crypto.randomUUID(),
       note: note.trim() || null,
       state: JSON.parse(JSON.stringify(figures)),
       created_at: new Date().toISOString(),
-    }
-    setSnapshots((prev) => [snapshot, ...prev])
+    }, ...prev])
     setNote('')
   }
 
-  function handleLoad(snapshot: LocalSnapshot) {
-    setFigures(snapshot.state.map((f) => ({ ...f, id: crypto.randomUUID(), updated_at: new Date().toISOString() })))
-    setConfirmLoad(null)
+  function load(s: Snap) {
+    setFigures(s.state.map(f => ({ ...f, id: crypto.randomUUID(), updated_at: new Date().toISOString() })))
+    setConfirmId(null)
   }
 
-  function formatTime(date: string) {
-    return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(date))
+  function fmt(d: string) {
+    return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(d))
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <span className="text-[10px] font-semibold text-[#1F4045]/50 uppercase tracking-widest px-1">
-        Snapshots
-      </span>
-      <div className="flex gap-1.5">
+    <div className="flex flex-col gap-4">
+      <div>
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#1F4045', marginBottom: 4 }}>Aufstellung speichern</p>
+        <p style={{ fontSize: 11, color: 'rgba(31,64,69,0.45)', lineHeight: 1.5 }}>
+          Snapshot erstellt eine Momentaufnahme des Bretts — damit wird Entwicklung über Sitzungen sichtbar.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
         <input
           value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Notiz (optional)..."
-          className="flex-1 text-[11px] px-2 py-1.5 rounded-lg bg-white/70 border border-white/80 focus:outline-none focus:bg-white placeholder:text-[#1F4045]/30 text-[#1F4045]"
+          onChange={e => setNote(e.target.value)}
+          placeholder="Notiz, z.B. «Beginn Sitzung 2»"
+          style={{
+            flex: 1, padding: '8px 12px', borderRadius: 10,
+            border: '1px solid rgba(31,64,69,0.12)', fontSize: 12,
+            color: '#1F4045', background: 'white', outline: 'none',
+          }}
+          onKeyDown={e => e.key === 'Enter' && save()}
         />
         <button
-          onClick={handleSave}
+          onClick={save}
           disabled={figures.length === 0}
-          className="px-2.5 py-1.5 text-[11px] rounded-lg bg-white/80 border border-white/80 text-[#1F4045]/70 hover:bg-white hover:text-[#1F4045] disabled:opacity-40 transition-all"
+          style={{
+            padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+            background: figures.length === 0 ? 'rgba(31,64,69,0.15)' : '#1F4045',
+            color: figures.length === 0 ? 'rgba(31,64,69,0.4)' : 'white',
+            border: 'none', cursor: figures.length === 0 ? 'not-allowed' : 'pointer',
+            whiteSpace: 'nowrap',
+          }}
         >
           Speichern
         </button>
       </div>
 
-      {snapshots.length > 0 ? (
-        <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
-          {snapshots.map((s) => (
-            <div key={s.id} className="flex items-center gap-2 text-[11px] p-2 rounded-lg bg-white/50 hover:bg-white/80 transition-colors">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-[#1F4045]/80 truncate">{s.note || formatTime(s.created_at)}</p>
-                {s.note && <p className="text-[#1F4045]/40">{formatTime(s.created_at)}</p>}
-              </div>
-              {confirmLoad === s.id ? (
-                <div className="flex gap-1 shrink-0">
-                  <button onClick={() => handleLoad(s)} className="text-[10px] px-1.5 py-0.5 rounded bg-[#1F4045] text-white">Ja</button>
-                  <button onClick={() => setConfirmLoad(null)} className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 text-[#1F4045]/60">Nein</button>
+      {snaps.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: 'rgba(31,64,69,0.4)', textTransform: 'uppercase' }}>
+            {snaps.length} Snapshots
+          </p>
+          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+            {snaps.map((s, i) => (
+              <div
+                key={s.id}
+                style={{
+                  background: 'white', borderRadius: 12, padding: '12px 14px',
+                  border: `1px solid ${previewId === s.id ? 'rgba(201,169,110,0.5)' : 'rgba(31,64,69,0.08)'}`,
+                  transition: 'all 0.1s',
+                }}
+                onMouseEnter={() => setPreviewId(s.id)}
+                onMouseLeave={() => setPreviewId(null)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: '#C9A96E',
+                        background: 'rgba(201,169,110,0.12)', padding: '1px 6px', borderRadius: 100,
+                      }}>
+                        #{snaps.length - i}
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#1F4045' }}>
+                        {s.note || fmt(s.created_at)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {s.note && <span style={{ fontSize: 10, color: 'rgba(31,64,69,0.4)' }}>{fmt(s.created_at)}</span>}
+                      <span style={{ fontSize: 10, color: 'rgba(31,64,69,0.4)' }}>· {s.state.length} Figuren</span>
+                    </div>
+                  </div>
+
+                  {confirmId === s.id ? (
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => load(s)} style={{ padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#1F4045', color: 'white', border: 'none', cursor: 'pointer' }}>Laden</button>
+                      <button onClick={() => setConfirmId(null)} style={{ padding: '4px 8px', borderRadius: 8, fontSize: 11, color: 'rgba(31,64,69,0.5)', border: '1px solid rgba(31,64,69,0.1)', background: 'white', cursor: 'pointer' }}>Nein</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmId(s.id)}
+                      style={{ padding: '4px 10px', borderRadius: 8, fontSize: 11, color: 'rgba(31,64,69,0.5)', border: '1px solid rgba(31,64,69,0.1)', background: 'white', cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      Laden
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <button onClick={() => setConfirmLoad(s.id)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/80 text-[#1F4045]/60 hover:text-[#1F4045] shrink-0">
-                  Laden
-                </button>
-              )}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
-      ) : (
-        <p className="text-[10px] text-[#1F4045]/40 italic">
-          Board-Zustand speichern um Entwicklung zu dokumentieren.
-        </p>
+      )}
+
+      {snaps.length === 0 && (
+        <div style={{
+          textAlign: 'center', padding: '28px 16px',
+          background: 'rgba(31,64,69,0.03)', borderRadius: 14,
+          border: '1px dashed rgba(31,64,69,0.12)',
+        }}>
+          <p style={{ fontSize: 12, color: 'rgba(31,64,69,0.35)', lineHeight: 1.6 }}>
+            Noch keine Snapshots.<br />Brett-Zustand festhalten um Entwicklung zu dokumentieren.
+          </p>
+        </div>
       )}
     </div>
   )
